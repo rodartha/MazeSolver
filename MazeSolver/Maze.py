@@ -3,8 +3,7 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-# NOTE: need contingency for mazes that are unsolvable
+# NOTE: maybe need to downsample maze images so that the pixel level isnt too large
 
 class Maze:
     def __init__(self, file_path):
@@ -18,6 +17,7 @@ class Maze:
 
         # List of (x, y) coordinates that comprise the solution for the maze
         self.correct_path = []
+
     
     def load_photo(self, file_path):
         img = Image.open(file_path).convert('LA')
@@ -26,6 +26,7 @@ class Maze:
         maze[maze <= 155] = 0
 
         return maze
+
 
     def get_start_end(self):
         print("Please click the start position of the maze, then the end position")
@@ -38,6 +39,7 @@ class Maze:
         plt.close()
         return locs
 
+
     def display_solved_maze(self):
         maze_color = self.maze
         maze_color[self.maze == 1] = 255
@@ -49,6 +51,7 @@ class Maze:
             color_image[loc[0], loc[1], 0] = 255
 
         return Image.fromarray(color_image)
+
 
     def solve(self):
         open_list = [self.start_loc]
@@ -64,26 +67,80 @@ class Maze:
 
             # NOTE: following code assumes (0,0) is top left
             # check space one up
-            # NOTE: this is assuming that the program will properly handle equality operations for Node() and for lists
             if curr_node.y_pos + 1 < self.maze.shape[0]:
-                new_node = Node(curr_node.x_pos, curr_node.y_pos + 1, curr_node, [curr_node.y_pos + 1, curr_node.x_pos])
+                new_node = Node(curr_node.x_pos, curr_node.y_pos + 1, curr_node, get_f([curr_node.y_pos + 1, curr_node.x_pos]))
                 if [curr_node.y_pos + 1, curr_node.x_pos] == self.end_pos:
                     target_node = new_node
                     solved = True
                     break
-                elif self.maze[curr_node.y_pos + 1, curr_node.x_pos] == 0 and new_node not in closed_set:
+                elif self.maze[curr_node.y_pos + 1, curr_node.x_pos] == 0 and not node_in_set(new_node, closed_set):
                     open_list.append(new_node)
             # check space one down
+            if curr_node.y_pos - 1 >= 0:
+                new_node = Node(curr_node.x_pos, curr_node.y_pos - 1, curr_node, get_f([curr_node.y_pos - 1, curr_node.x_pos]))
+                if [curr_node.y_pos - 1, curr_node.x_pos] == self.end_pos:
+                    target_node = new_node
+                    solved = True
+                    break
+                elif self.maze[curr_node.y_pos - 1, curr_node.x_pos] == 0 and not node_in_set(new_node, closed_set):
+                    open_list.append(new_node)
             # check space one left
+            if curr_node.x_pos - 1 >= 0:
+                new_node = Node(curr_node.x_pos - 1, curr_node.y_pos, curr_node, get_f([curr_node.y_pos, curr_node.x_pos - 1]))
+                if [curr_node.y_pos, curr_node.x_pos - 1] == self.end_pos:
+                    target_node = new_node
+                    solved = True
+                    break
+                elif self.maze[curr_node.y_pos, curr_node.x_pos - 1] == 0 and not node_in_set(new_node, closed_set):
+                    open_list.append(new_node)
             # check space one right
+            if curr_node.x_pos + 1 < self.maze.shape[1]:
+                new_node = Node(curr_node.x_pos + 1, curr_node.y_pos, curr_node, get_f([curr_node.y_pos, curr_node.x_pos + 1]))
+                if [curr_node.y_pos, curr_node.x_pos + 1] == self.end_pos:
+                    target_node = new_node
+                    solved = True
+                    break
+                elif self.maze[curr_node.y_pos, curr_node.x_pos + 1] == 0 and not node_in_set(new_node, closed_set):
+                    open_list.append(new_node)
+
             # Make sure the last element in open_list has the minimal f_score
             open_list = sorted(open_list, key=lambda x: x.f_score, reverse=True)
 
         return solved, target_node
 
 
+    def get_solution_points(self, node):
+        solution = []
+
+        curr_y = node.y_pos
+        curr_x = node.x_pos
+        solution.append([curr_y, curr_x])
+        node = node.parent
+        while curr_x != self.start_loc.x_pos and curr_y != self.start_loc.y_pos:
+            curr_y = node.y_pos
+            curr_x = node.x_pos
+            solution.append([curr_y, curr_x])
+            node = node.parent
+
+        return solution.reverse()
+
+
+    def run(self):
+        # NOTE: figure out what if anything this function should return
+        solved, target_node = self.solve()
+        if not solved:
+            return None
+
+        self.correct_path = self.get_solution_points(target_node)
+
+        solved_image = self.display_solved_maze()
+
+        return solved_image
+
+
     def get_f(self, pos):
         return self.find_dist(pos, self.end_pos) + self.find_dist(pos, self.start_loc.get_pos())
+
 
     def find_dist(self, pos1, pos2):
         return np.linalg.norm(pos1 - pos2)
@@ -99,3 +156,15 @@ class Node:
     def get_pos(self):
         return [self.x_pos, self.y_pos]
 
+
+def node_in_set(node, s):
+    """
+    NOTE: this function is necessary because "not in" will compare
+    object values rather than contents. Need to figure out a more efficient way
+    to do this.
+    """
+    for value in s:
+        if node == value:
+            return True
+
+    return False
